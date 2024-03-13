@@ -1,0 +1,11 @@
+smtp:
+- id: qq
+  addr: mail.qq.com
+  port: 465
+
+profiles:
+- id: leonardo_yu@qq
+  smtpRef: qq
+  login_user: 87363255@qq.com
+  password: test
+  defaultFrom: 87363255@qq.com, leonardo_yu

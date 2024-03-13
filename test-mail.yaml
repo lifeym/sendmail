@@ -1,0 +1,21 @@
+messages:
+- id: test-mail
+  subject: "test"
+  body:
+    plain: "just a test!"
+    html: |
+      <h1>WTF!</h1>
+  attachments:
+  - name: test-attach
+    path: flake.nix
+
+tasks:
+- id: stock-info-to-self
+  actions:
+  - profileRef: leonardo_yu@qq
+    from: test-override@qq.com, admin
+    to: [ "leonardo_yu@hotmail.com, lifeym" ]
+    cc: []
+    bcc: []
+    messageRef:
+    - test-mail
