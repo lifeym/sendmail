@@ -125,6 +125,5 @@ func (mb *messageBuilder) Build(m *Message) []byte {
 		mb.appendString(m.Body)
 	}
 
-	fmt.Println(string(mb.buf.Bytes()))
 	return mb.buf.Bytes()
 }
