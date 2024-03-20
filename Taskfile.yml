@@ -1,0 +1,13 @@
+version: '3'
+
+tasks:
+  default:
+    cmds:
+    - cmd: task -l
+  
+  test:
+    desc: |
+      Run test send mail
+    dir: '{{.TASKFILE_DIR}}'
+    cmds:
+    - go run main.go send -a leonardo_yu -m stock-info-to-self -c test-mail.yaml

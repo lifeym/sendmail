@@ -3,12 +3,17 @@ package main
 import (
 	"os"
 
-	"github.com/lifeym/she/mail"
+	"github.com/lifeym/she/cmd"
 )
 
 func main() {
-	smtp := mail.New("87363255@qq.com", "password", "host", 587)
-	msg := mail.NewMessage()
-	smtp.Send(msg)
+	if err := cmd.Execute(); err != nil {
+		//fmt.Fprintln(os.Stderr, err)
+		// fmt.Println("exit 1")
+		os.Exit(1)
+		return
+	}
+
+	//fmt.Println("exit 0")
 	os.Exit(0)
 }

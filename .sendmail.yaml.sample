@@ -1,0 +1,12 @@
+smtp:
+- name: qq
+  host: smtp.qq.com
+  port: 587 #465 587
+  starttls: true
+
+accounts:
+- name: leonardo_yu
+  smtpRef: qq
+  loginUser: 123@qq.com
+  password: xxx
+  defaultFrom: xxx@qq.com
