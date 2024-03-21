@@ -1,0 +1,7 @@
+defaultPlatforms:
+- all
+
+builds:
+- id: sis-server
+  env:
+  - GOPROXY=https://goproxy.io,direct

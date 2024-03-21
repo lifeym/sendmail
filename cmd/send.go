@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/lifeym/she/config"
 	"github.com/lifeym/she/mail"
@@ -12,6 +13,7 @@ var (
 	_account string
 	_mail    string
 	_config  string
+	_print   bool
 )
 
 var sendCmd = &cobra.Command{
@@ -33,6 +35,7 @@ func init() {
 	sendCmd.Flags().StringVarP(&_account, "account", "a", "", `Account config name in config file.`)
 	sendCmd.Flags().StringVarP(&_mail, "mail", "m", "", `Mail config name in config file.`)
 	sendCmd.Flags().StringVarP(&_config, "config", "c", "", `Mail config file.`)
+	sendCmd.Flags().BoolVarP(&_print, "print", "p", false, `Print mail message content.`)
 	sendCmd.MarkFlagRequired("account")
 	sendCmd.MarkFlagRequired("mail")
 	sendCmd.MarkFlagRequired("config")
@@ -87,21 +90,47 @@ func send(accountRef string, mailRef string, cfgPath string) error {
 		return fmt.Errorf("both Envelop.From and Account.DefaultFrom are empty")
 	}
 
-	if msgDef.Subject == "" {
-		msg.Subject = envelope.Subject
-	} else {
-		msg.Subject = msgDef.Subject
-	}
+	msg.Subject = envelope.Subject
 
 	msg.To = envelope.To
 	msg.Bcc = envelope.Bcc
 	msg.Cc = envelope.Cc
 	msg.Body = msgDef.Body
 	for _, att := range msgDef.Attachments {
-		err = msg.AttachFile(att.Path, att.Name)
+		err = msg.AttachFile(att.Path, att.Name, att.Headers)
 		if err != nil {
 			return fmt.Errorf("cannot attach file: %s. Err: %s", att.Path, err)
 		}
+	}
+
+	if msgDef.Headers != nil {
+		for k, v := range msgDef.Headers {
+			msg.SetHeader(k, v)
+		}
+	}
+
+	if msg.GetHeader("Subject") != "" {
+		msg.Subject = msg.GetHeader("Subject")
+		msg.RemoveHeader("Subject")
+	}
+
+	if msg.GetHeader("To") != "" {
+		msg.To = strings.Split(msg.GetHeader("To"), ",")
+		msg.RemoveHeader("To")
+	}
+
+	if msg.GetHeader("Cc") != "" {
+		msg.Cc = strings.Split(msg.GetHeader("Cc"), ",")
+		msg.RemoveHeader("Cc")
+	}
+
+	if msg.GetHeader("Bcc") != "" {
+		msg.Cc = strings.Split(msg.GetHeader("Bcc"), ",")
+		msg.RemoveHeader("Bcc")
+	}
+
+	if _print {
+		fmt.Println(string(msg.ToBytes()))
 	}
 
 	smtpHost := cfg.GetSmtp(account.SmtpRef)

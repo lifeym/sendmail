@@ -10,4 +10,8 @@ tasks:
       Run test send mail
     dir: '{{.TASKFILE_DIR}}'
     cmds:
-    - go run main.go send -a leonardo_yu -m stock-info-to-self -c test-mail.yaml
+    - go run main.go send -a leonardo_yu -m stock-info-to-self -c test-mail.yaml -p
+  
+  build:
+    cmds:
+    - ko build

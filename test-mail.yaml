@@ -1,11 +1,18 @@
 messages:
 - name: test-mail
-  subject: "test"
+  # message headers
+  # optional
+  # provides extra user-defined headers or overides envelope settings,
+  # such as content-type, subject, from, to etc...
+  # Be careful the "headers" is just a map can only contains string key-value pairs 
+  headers:
+    subject: "oh my god" # message headers overrides envelope's settings
   body: |
       <h1>WTF!</h1>
   attachments:
   - name: test-attach
     path: flake.nix
+    #headers:
 
 envelopes:
 - name: to-self

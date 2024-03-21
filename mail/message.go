@@ -2,6 +2,7 @@ package mail
 
 import (
 	"container/list"
+	"net/textproto"
 	"os"
 	"path/filepath"
 )
@@ -9,6 +10,7 @@ import (
 type MessageAttachment struct {
 	Name    string
 	Content []byte
+	Headers textproto.MIMEHeader
 }
 
 // Message represents a mail message to be sent by smtp server
@@ -20,15 +22,29 @@ type Message struct {
 	Subject     string
 	Body        string
 	attachments *list.List
+	headers     textproto.MIMEHeader
 }
 
 func NewMessage() *Message {
 	return &Message{
 		attachments: list.New(),
+		headers:     make(textproto.MIMEHeader),
 	}
 }
 
-func (m *Message) AttachFile(src string, name string) error {
+func (m *Message) SetHeader(field string, value string) {
+	m.headers.Set(field, value)
+}
+
+func (m *Message) GetHeader(field string) string {
+	return m.headers.Get(field)
+}
+
+func (m *Message) RemoveHeader(field string) {
+	m.headers.Del(field)
+}
+
+func (m *Message) AttachFile(src string, name string, headers map[string]string) error {
 	b, err := os.ReadFile(src)
 	if err != nil {
 		return err
@@ -42,7 +58,12 @@ func (m *Message) AttachFile(src string, name string) error {
 		attachName = name
 	}
 
-	m.attachments.PushBack(&MessageAttachment{attachName, b})
+	result := MessageAttachment{attachName, b, make(textproto.MIMEHeader)}
+	for k, v := range headers {
+		result.Headers.Set(k, v)
+	}
+
+	m.attachments.PushBack(&result)
 	return nil
 }
 

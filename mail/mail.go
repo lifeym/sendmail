@@ -44,7 +44,7 @@ func DialInsecure(addr string) (*smtp.Client, error) {
 	return smtp.NewClient(conn, host)
 }
 
-func SendMail(c *smtp.Client, a smtp.Auth, from string, to []string, msg []byte) error {
+func (s *SmtpAuth) SendMail(c *smtp.Client, from string, to []string, msg []byte) error {
 	var err error
 	if err = validateLine(from); err != nil {
 		return err
@@ -56,26 +56,19 @@ func SendMail(c *smtp.Client, a smtp.Auth, from string, to []string, msg []byte)
 		}
 	}
 
-	/* 	if err = c.hello(); err != nil {
-		return err
-	} */
-
-	/* 	if ok, _ := c.Extension("STARTTLS"); ok {
-		config := &tls.Config{ServerName: c.serverName}
-		if testHookStartTLS != nil {
-			testHookStartTLS(config)
-		}
+	if ok, _ := c.Extension("STARTTLS"); ok {
+		config := &tls.Config{ServerName: s.host}
 		if err = c.StartTLS(config); err != nil {
 			return err
 		}
-	} */
+	}
 
-	if a != nil {
+	if s.auth != nil {
 		if ok, _ := c.Extension("AUTH"); !ok {
 			return errors.New("smtp: server doesn't support AUTH")
 		}
 
-		if err = c.Auth(a); err != nil {
+		if err = c.Auth(s.auth); err != nil {
 			return err
 		}
 	}
@@ -125,17 +118,24 @@ func (s *SmtpAuth) Send(m *Message) error {
 	// Here is the key, you need to call tls.Dial instead of smtp.Dial
 	// for smtp servers running on 465 that require an ssl connection
 	// from the very beginning (no starttls)
+	// if s.starttls {
+	// 	return smtp.SendMail(addr, s.auth, m.From, m.To, m.ToBytes())
+	// }
+
+	var c *smtp.Client
+	var err error
 	if s.starttls {
-		return smtp.SendMail(addr, s.auth, m.From, m.To, m.ToBytes())
+		c, err = smtp.Dial(addr)
+	} else {
+		c, err = DialInsecure(addr)
 	}
 
-	c, err := DialInsecure(addr)
 	if err != nil {
 		return err
 	}
 
 	defer c.Close()
-	return SendMail(c, s.auth, m.From, m.To, m.ToBytes())
+	return s.SendMail(c, m.From, m.To, m.ToBytes())
 }
 
 // validateLine checks to see if a line has CR or LF as per RFC 5321.

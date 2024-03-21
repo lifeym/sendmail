@@ -9,11 +9,12 @@ import (
 // Message file
 type messageConfig struct {
 	Name        string
-	Subject     string
+	Headers     map[string]string
 	Body        string
 	Attachments []struct {
-		Name string
-		Path string
+		Name    string
+		Path    string
+		Headers map[string]string
 	}
 }
 
@@ -34,27 +35,13 @@ type mailConfig struct {
 	MessageOverride  messageConfig `yaml:"messageOverride"`
 }
 
-/* type messageTaskConfig struct {
-	Name    string
-	Actions []struct {
-		ProfileRef  string `yaml:"profileRef"`
-		From        string
-		To          []string
-		Cc          []string
-		Bcc         []string
-		MessageRefs []string `yaml:"messageRefs"`
-	}
-} */
-
 type MessageFile struct {
-	Messages  []messageConfig
-	Envelopes []envelopConfig
-	Mails     []mailConfig
-	// Tasks      []messageTaskConfig
+	Messages    []messageConfig
+	Envelopes   []envelopConfig
+	Mails       []mailConfig
 	messageMap  map[string]*messageConfig
 	envelopeMap map[string]*envelopConfig
 	mailMap     map[string]*mailConfig
-	// taskMap    map[string]*messageTaskConfig
 }
 
 func LoadMessageFile(filename string) (*MessageFile, error) {
