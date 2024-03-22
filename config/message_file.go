@@ -1,47 +1,58 @@
 package config
 
 import (
+	"net/textproto"
 	"os"
 
 	"gopkg.in/yaml.v3"
 )
 
+type mailHeaderData map[string]StringArray
+
+func (h mailHeaderData) ToMIMEHeader() textproto.MIMEHeader {
+	result := make(textproto.MIMEHeader)
+	for k := range h {
+		for _, v := range h[k] {
+			result.Add(k, v)
+		}
+	}
+
+	return result
+}
+
 // Message file
-type messageConfig struct {
+type messageTemplate struct {
 	Name        string
-	Headers     map[string]string
+	Header      mailHeaderData
 	Body        string
 	Attachments []struct {
-		Name    string
-		Path    string
-		Headers map[string]string
+		Name   string
+		Path   string
+		Header mailHeaderData
 	}
 }
 
-type envelopConfig struct {
-	Name    string
-	Subject string
-	From    string
-	To      []string
-	Cc      []string
-	Bcc     []string
+type messageSpec struct {
+	Header      mailHeaderData
+	Body        string
+	Attachments []struct {
+		Name   string
+		Path   string
+		Header mailHeaderData
+	}
 }
 
 type mailConfig struct {
-	Name             string
-	EnvelopeRef      string        `yaml:"envelopeRef"`
-	EnvelopeOverride envelopConfig `yaml:"envelopeOverride"`
-	MessageRef       string        `yaml:"messageRef"`
-	MessageOverride  messageConfig `yaml:"messageOverride"`
+	Name     string
+	Template string
+	Spec     messageSpec
 }
 
 type MessageFile struct {
-	Messages    []messageConfig
-	Envelopes   []envelopConfig
-	Mails       []mailConfig
-	messageMap  map[string]*messageConfig
-	envelopeMap map[string]*envelopConfig
-	mailMap     map[string]*mailConfig
+	Templates          []messageTemplate
+	Mails              []mailConfig
+	messageTemplateMap map[string]*messageTemplate
+	mailMap            map[string]*mailConfig
 }
 
 func LoadMessageFile(filename string) (*MessageFile, error) {
@@ -56,14 +67,9 @@ func LoadMessageFile(filename string) (*MessageFile, error) {
 		return nil, err
 	}
 
-	mf.messageMap = make(map[string]*messageConfig)
-	for _, ms := range mf.Messages {
-		mf.messageMap[ms.Name] = &ms
-	}
-
-	mf.envelopeMap = make(map[string]*envelopConfig)
-	for _, es := range mf.Envelopes {
-		mf.envelopeMap[es.Name] = &es
+	mf.messageTemplateMap = make(map[string]*messageTemplate)
+	for _, ts := range mf.Templates {
+		mf.messageTemplateMap[ts.Name] = &ts
 	}
 
 	mf.mailMap = make(map[string]*mailConfig)
@@ -74,12 +80,8 @@ func LoadMessageFile(filename string) (*MessageFile, error) {
 	return &mf, nil
 }
 
-func (mf *MessageFile) GetMessage(name string) *messageConfig {
-	return mf.messageMap[name]
-}
-
-func (mf *MessageFile) GetEnvelope(name string) *envelopConfig {
-	return mf.envelopeMap[name]
+func (mf *MessageFile) GetTemplate(name string) *messageTemplate {
+	return mf.messageTemplateMap[name]
 }
 
 func (mf *MessageFile) GetMail(name string) *mailConfig {

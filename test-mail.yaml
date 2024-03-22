@@ -1,30 +1,21 @@
-messages:
+templates:
 - name: test-mail
-  # message headers
-  # optional
-  # provides extra user-defined headers or overides envelope settings,
-  # such as content-type, subject, from, to etc...
-  # Be careful the "headers" is just a map can only contains string key-value pairs 
-  headers:
-    subject: "oh my god" # message headers overrides envelope's settings
+  header:
+    subject: "oh my god"
+    from: "87363255@qq.com"
+    to: [ "lifeym<leonardo_yu@hotmail.com>" ]
+    cc: []
+    bcc: []
   body: |
       <h1>WTF!</h1>
   attachments:
   - name: test-attach
     path: flake.nix
-    #headers:
-
-envelopes:
-- name: to-self
-  subject: "test"
-  from: 87363255@qq.com
-  to: [ "leonardo_yu@hotmail.com" ]
-  cc: []
-  bcc: []
+    #header:
 
 mails:
 - name: stock-info-to-self
-  envelopeRef: to-self
-  envelopeOverride:
-  messageRef: test-mail
-  messageOverride:
+  template: test-mail
+  spec:
+    header:
+      subject: "override subject with spec"

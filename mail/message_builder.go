@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"mime/multipart"
 	"net/http"
+	"net/mail"
 	"net/textproto"
 	"slices"
-	"strings"
 )
 
 // Utility for building mail message
@@ -22,76 +22,68 @@ func newMessageBuilder() *messageBuilder {
 	}
 }
 
-func (mb *messageBuilder) writeLine(s string) {
-	mb.buf.WriteString(fmt.Sprintf("%s\r\n", s))
+func (mb *messageBuilder) writeLine(s string) (int, error) {
+	return mb.buf.WriteString(fmt.Sprintf("%s\r\n", s))
 }
 
-func (mb *messageBuilder) writeEmptyLine() {
-	mb.buf.WriteString("\r\n")
+func (mb *messageBuilder) writeEmptyLine() (int, error) {
+	return mb.buf.WriteString("\r\n")
 }
 
-func (mb *messageBuilder) appendString(s string) {
-	mb.buf.WriteString(s)
+func (mb *messageBuilder) writeString(s string) (int, error) {
+	return mb.buf.WriteString(s)
 }
 
-func (mb *messageBuilder) writeFiled(name string, value string) {
-	mb.writeLine(fmt.Sprintf("%s: %s", name, value))
+func (mb *messageBuilder) writeFiled(name string, value string) (int, error) {
+	return mb.writeLine(fmt.Sprintf("%s: %s", name, value))
 }
 
-func (mb *messageBuilder) appendFrom(from string) {
-	mb.writeFiled("From", from)
-}
+// func (mb *messageBuilder) appendFrom(from string) {
+// 	mb.writeFiled("From", from)
+// }
 
-func (mb *messageBuilder) appendSubject(subject string) {
-	mb.writeFiled("Subject", subject)
-}
+// func (mb *messageBuilder) appendSubject(subject string) {
+// 	mb.writeFiled("Subject", subject)
+// }
 
-func (mb *messageBuilder) appendTo(mailto []string) {
-	mb.writeFiled("To", strings.Join(mailto, ","))
-}
+// func (mb *messageBuilder) appendTo(mailto []string) {
+// 	mb.writeFiled("To", strings.Join(mailto, ","))
+// }
 
-func (mb *messageBuilder) appendCc(cc []string) {
-	mb.writeFiled("Cc", strings.Join(cc, ","))
-}
+// func (mb *messageBuilder) appendCc(cc []string) {
+// 	mb.writeFiled("Cc", strings.Join(cc, ","))
+// }
 
-func (mb *messageBuilder) appendBcc(bcc []string) {
-	mb.writeFiled("Bcc", strings.Join(bcc, ","))
-}
-
-func (mb *messageBuilder) writeHeaders(headers textproto.MIMEHeader) {
-	if headers == nil {
-		return
+func (mb *messageBuilder) writeHeader(h mail.Header) error {
+	if h == nil {
+		return nil
 	}
 
-	keys := make([]string, 0, len(headers))
-	for k := range headers {
+	keys := make([]string, 0, len(h))
+	for k := range h {
 		keys = append(keys, k)
 	}
 
 	slices.Sort(keys)
 	for _, k := range keys {
-		for _, v := range headers[k] {
-			mb.writeFiled(textproto.CanonicalMIMEHeaderKey(k), v)
+		for _, v := range h[k] {
+			if _, err := mb.writeFiled(textproto.CanonicalMIMEHeaderKey(k), v); err != nil {
+				return err
+			}
 		}
 	}
+
+	return nil
 }
 
-func (mb *messageBuilder) appendMessageAttachments(m *Message, mw *multipart.Writer) error {
+func writeMessageAttachments(m *Message, mw *multipart.Writer) error {
 	for el := m.attachments.Front(); el != nil; el = el.Next() {
 		att := el.Value.(*MessageAttachment)
-		if att.Headers.Get("Content-Type") == "" {
-			att.Headers.Add("Content-Type", http.DetectContentType(att.Content))
-		}
+		headerPatchDefault(att.Header, "Content-Type", http.DetectContentType(att.Content))
+		headerPatchDefault(att.Header, "Content-Transfer-Encoding", "base64")
+		headerPatchDefault(att.Header, "Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", att.Name))
 
-		if att.Headers.Get("Content-Transfer-Encoding") == "" {
-			att.Headers.Add("Content-Transfer-Encoding", "base64")
-		}
-
-		if att.Headers.Get("Content-Disposition") == "" {
-			att.Headers.Add("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", att.Name))
-		}
-
-		w, err := mw.CreatePart(att.Headers)
+		w, err := mw.CreatePart(att.Header)
 		if err != nil {
 			return err
 		}
@@ -104,38 +96,67 @@ func (mb *messageBuilder) appendMessageAttachments(m *Message, mw *multipart.Wri
 	return nil
 }
 
-func (mb *messageBuilder) Build(m *Message) []byte {
-	withAttachments := m.attachments.Len() > 0
-	mb.appendFrom(m.From)
-	mb.appendSubject(m.Subject)
-	mb.appendTo(m.To)
-	if len(m.Cc) > 0 {
-		mb.appendCc(m.Cc)
+func (mb *messageBuilder) Build(m *Message) ([]byte, error) {
+	// mb.appendFrom(m.From)
+	// mb.appendSubject(m.Subject)
+	// mb.appendTo(m.To)
+	// if len(m.Cc) > 0 {
+	// 	mb.appendCc(m.Cc)
+	// }
+	if err := mb.writeHeader(m.header); err != nil {
+		return nil, err
 	}
 
-	if len(m.Bcc) > 0 {
-		mb.appendBcc(m.Bcc)
-	}
-
-	mb.writeHeaders(m.headers)
 	// mb.appendFiled("MIME-Version", "1.0")
 
-	if withAttachments {
+	if m.attachments.Len() > 0 {
 		mw := multipart.NewWriter(mb.buf)
 		boundary := mw.Boundary()
-		mb.writeFiled("Content-Type", fmt.Sprintf("multipart/mixed; boundary=\"%s\"", boundary))
-		mb.writeEmptyLine()
+		if _, err := mb.writeFiled("Content-Type", fmt.Sprintf("multipart/mixed; boundary=\"%s\"", boundary)); err != nil {
+			return nil, err
+		}
+
+		if _, err := mb.writeEmptyLine(); err != nil {
+			return nil, err
+		}
+
 		mpHeader := make(textproto.MIMEHeader)
 		mpHeader.Add("Content-Type", fmt.Sprintf("%s; charset=utf-8", http.DetectContentType([]byte(m.Body))))
-		w, _ := mw.CreatePart(mpHeader)
-		w.Write([]byte(m.Body))
-		mb.appendMessageAttachments(m, mw)
-		mw.Close()
-		// mb.appendLine(fmt.Sprintf("--%s", boundary))
+		w, err := mw.CreatePart(mpHeader)
+		if err != nil {
+			return nil, err
+		}
+
+		if _, err = w.Write([]byte(m.Body)); err != nil {
+			return nil, err
+		}
+
+		if err = writeMessageAttachments(m, mw); err != nil {
+			return nil, err
+		}
+
+		if err = mw.Close(); err != nil {
+			return nil, err
+		}
 	} else {
-		mb.writeFiled("Content-Type", "text/plain; charset=utf-8")
-		mb.appendString(m.Body)
+		if _, err := mb.writeFiled("Content-Type", "text/plain; charset=utf-8"); err != nil {
+			return nil, err
+		}
+
+		if _, err := mb.writeEmptyLine(); err != nil {
+			return nil, err
+		}
+
+		if _, err := mb.writeString(m.Body); err != nil {
+			return nil, err
+		}
 	}
 
-	return mb.buf.Bytes()
+	return mb.buf.Bytes(), nil
+}
+
+func headerPatchDefault(header textproto.MIMEHeader, k string, v string) {
+	if header.Get(k) == "" {
+		header.Add(k, v)
+	}
 }

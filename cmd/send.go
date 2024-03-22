@@ -2,7 +2,8 @@ package cmd
 
 import (
 	"fmt"
-	"strings"
+	"slices"
+	"time"
 
 	"github.com/lifeym/she/config"
 	"github.com/lifeym/she/mail"
@@ -23,6 +24,7 @@ var sendCmd = &cobra.Command{
                    Copyright lifeym 2024`,
 	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+
 		if err := send(_account, _mail, _config); err != nil {
 			return err
 		}
@@ -33,11 +35,11 @@ var sendCmd = &cobra.Command{
 
 func init() {
 	sendCmd.Flags().StringVarP(&_account, "account", "a", "", `Account config name in config file.`)
-	sendCmd.Flags().StringVarP(&_mail, "mail", "m", "", `Mail config name in config file.`)
-	sendCmd.Flags().StringVarP(&_config, "config", "c", "", `Mail config file.`)
-	sendCmd.Flags().BoolVarP(&_print, "print", "p", false, `Print mail message content.`)
+	sendCmd.Flags().StringVarP(&_mail, "mail", "m", "", `Mail config names in config file to be sent, default to all.`)
+	sendCmd.Flags().StringVarP(&_config, "message-file", "f", "", `Mail message config file.`)
+	sendCmd.Flags().BoolVarP(&_print, "print", "p", false, `Print mail message content to stdout.`)
 	sendCmd.MarkFlagRequired("account")
-	sendCmd.MarkFlagRequired("mail")
+	// sendCmd.MarkFlagRequired("mail")
 	sendCmd.MarkFlagRequired("config")
 	// rootCmd.PersistentFlags().StringVarP(&_dsn, "datasource", "s", "", `datasource url for connecting to a database, run hare -h database for more  details.`)
 	// rootCmd.Flags().StringVarP(&_output, "output", "o", "", `output file name of generated results(use standard output by default)`)
@@ -69,68 +71,66 @@ func send(accountRef string, mailRef string, cfgPath string) error {
 		return fmt.Errorf("mail definition not found: %s", mailRef)
 	}
 
-	envelope := msgFile.GetEnvelope(mailDef.EnvelopeRef)
-	if envelope == nil {
-		return fmt.Errorf("envelope definition not found: %s", mailDef.EnvelopeRef)
-	}
-
-	msgDef := msgFile.GetMessage(mailDef.MessageRef)
-	if msgDef == nil {
-		return fmt.Errorf("message definition not found: %s", mailDef.MessageRef)
+	msgTpl := msgFile.GetTemplate(mailDef.Template)
+	if msgTpl == nil {
+		return fmt.Errorf("message definition not found: %s", mailDef.Template)
 	}
 
 	msg := mail.NewMessage()
-	if envelope.From == "" {
-		msg.From = account.DefaultFrom
+
+	// construct message header
+	for k := range msgTpl.Header {
+		for _, v := range msgTpl.Header[k] {
+			msg.AddHeader(k, v)
+		}
+	}
+
+	for k := range mailDef.Spec.Header {
+		msg.RemoveHeader(k)
+		for _, v := range mailDef.Spec.Header[k] {
+			msg.AddHeader(k, v)
+		}
+	}
+
+	if msg.GetHeader("from") == "" {
+		msg.SetHeader("from", account.DefaultFrom)
+	}
+
+	if msg.GetHeader("from") == "" {
+		return fmt.Errorf("mail: header missing or empty -- %s", "from")
+	}
+
+	if msg.GetHeader("to") == "" {
+		return fmt.Errorf("mail: header missing or empty -- %s", "to")
+	}
+
+	// body
+	if mailDef.Spec.Body != "" {
+		msg.Body = mailDef.Spec.Body
 	} else {
-		msg.From = envelope.From
+		msg.Body = msgTpl.Body
 	}
 
-	if msg.From == "" {
-		return fmt.Errorf("both Envelop.From and Account.DefaultFrom are empty")
-	}
-
-	msg.Subject = envelope.Subject
-
-	msg.To = envelope.To
-	msg.Bcc = envelope.Bcc
-	msg.Cc = envelope.Cc
-	msg.Body = msgDef.Body
-	for _, att := range msgDef.Attachments {
-		err = msg.AttachFile(att.Path, att.Name, att.Headers)
+	// attachements
+	for _, att := range slices.Concat(mailDef.Spec.Attachments, msgTpl.Attachments) {
+		err = msg.AttachFile(att.Path, att.Name, att.Header.ToMIMEHeader())
 		if err != nil {
 			return fmt.Errorf("cannot attach file: %s. Err: %s", att.Path, err)
 		}
 	}
 
-	if msgDef.Headers != nil {
-		for k, v := range msgDef.Headers {
-			msg.SetHeader(k, v)
-		}
-	}
-
-	if msg.GetHeader("Subject") != "" {
-		msg.Subject = msg.GetHeader("Subject")
-		msg.RemoveHeader("Subject")
-	}
-
-	if msg.GetHeader("To") != "" {
-		msg.To = strings.Split(msg.GetHeader("To"), ",")
-		msg.RemoveHeader("To")
-	}
-
-	if msg.GetHeader("Cc") != "" {
-		msg.Cc = strings.Split(msg.GetHeader("Cc"), ",")
-		msg.RemoveHeader("Cc")
-	}
-
-	if msg.GetHeader("Bcc") != "" {
-		msg.Cc = strings.Split(msg.GetHeader("Bcc"), ",")
-		msg.RemoveHeader("Bcc")
+	// date
+	if msg.GetHeader("date") == "" {
+		msg.SetHeader("date", time.Now().Format(time.RFC1123Z))
 	}
 
 	if _print {
-		fmt.Println(string(msg.ToBytes()))
+		msgData, err := msg.ToBytes()
+		if err != nil {
+			return nil
+		}
+
+		fmt.Println(string(msgData))
 	}
 
 	smtpHost := cfg.GetSmtp(account.SmtpRef)

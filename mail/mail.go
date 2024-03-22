@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/mail"
 	"net/smtp"
 	"strings"
 )
@@ -103,11 +104,36 @@ func (s *SmtpAuth) SendMail(c *smtp.Client, from string, to []string, msg []byte
 }
 
 func (s *SmtpAuth) Send(m *Message) error {
-	if err := validateLine(m.From); err != nil {
+	mailfrom, err := mail.ParseAddress(m.GetHeader("from"))
+	if err != nil {
 		return err
 	}
 
-	for _, recp := range m.To {
+	if err := validateLine(mailfrom.Address); err != nil {
+		return err
+	}
+
+	var mailto []string
+	addrs, _ := m.AddressList("to")
+	if addrs == nil {
+		return fmt.Errorf("mail: header not in message -- %s", "To")
+	}
+
+	for _, a := range addrs {
+		mailto = append(mailto, a.Address)
+	}
+
+	addrs, _ = m.AddressList("cc")
+	for _, a := range addrs {
+		mailto = append(mailto, a.Address)
+	}
+
+	addrs, _ = m.AddressList("bcc")
+	for _, a := range addrs {
+		mailto = append(mailto, a.Address)
+	}
+
+	for _, recp := range mailto {
 		if err := validateLine(recp); err != nil {
 			return err
 		}
@@ -118,12 +144,7 @@ func (s *SmtpAuth) Send(m *Message) error {
 	// Here is the key, you need to call tls.Dial instead of smtp.Dial
 	// for smtp servers running on 465 that require an ssl connection
 	// from the very beginning (no starttls)
-	// if s.starttls {
-	// 	return smtp.SendMail(addr, s.auth, m.From, m.To, m.ToBytes())
-	// }
-
 	var c *smtp.Client
-	var err error
 	if s.starttls {
 		c, err = smtp.Dial(addr)
 	} else {
@@ -135,7 +156,13 @@ func (s *SmtpAuth) Send(m *Message) error {
 	}
 
 	defer c.Close()
-	return s.SendMail(c, m.From, m.To, m.ToBytes())
+	var msgData []byte
+	msgData, err = m.ToBytes()
+	if err != nil {
+		return err
+	}
+
+	return s.SendMail(c, mailfrom.Address, mailto, msgData)
 }
 
 // validateLine checks to see if a line has CR or LF as per RFC 5321.

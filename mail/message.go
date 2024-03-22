@@ -2,6 +2,7 @@ package mail
 
 import (
 	"container/list"
+	"net/mail"
 	"net/textproto"
 	"os"
 	"path/filepath"
@@ -10,41 +11,45 @@ import (
 type MessageAttachment struct {
 	Name    string
 	Content []byte
-	Headers textproto.MIMEHeader
+	Header  textproto.MIMEHeader
 }
 
 // Message represents a mail message to be sent by smtp server
 type Message struct {
-	From        string
-	To          []string
-	Cc          []string
-	Bcc         []string
-	Subject     string
+	// From        string
+	// To          []string
+	// Cc          []string
+	// Bcc         []string
+	// Subject     string
 	Body        string
 	attachments *list.List
-	headers     textproto.MIMEHeader
+	header      mail.Header
 }
 
 func NewMessage() *Message {
 	return &Message{
 		attachments: list.New(),
-		headers:     make(textproto.MIMEHeader),
+		header:      make(mail.Header),
 	}
 }
 
+func (m *Message) AddHeader(field string, value string) {
+	textproto.MIMEHeader(m.header).Add(field, value)
+}
+
 func (m *Message) SetHeader(field string, value string) {
-	m.headers.Set(field, value)
+	textproto.MIMEHeader(m.header).Set(field, value)
 }
 
 func (m *Message) GetHeader(field string) string {
-	return m.headers.Get(field)
+	return m.header.Get(field)
 }
 
 func (m *Message) RemoveHeader(field string) {
-	m.headers.Del(field)
+	textproto.MIMEHeader(m.header).Del(field)
 }
 
-func (m *Message) AttachFile(src string, name string, headers map[string]string) error {
+func (m *Message) AttachFile(src string, name string, header textproto.MIMEHeader) error {
 	b, err := os.ReadFile(src)
 	if err != nil {
 		return err
@@ -58,11 +63,7 @@ func (m *Message) AttachFile(src string, name string, headers map[string]string)
 		attachName = name
 	}
 
-	result := MessageAttachment{attachName, b, make(textproto.MIMEHeader)}
-	for k, v := range headers {
-		result.Headers.Set(k, v)
-	}
-
+	result := MessageAttachment{attachName, b, header}
 	m.attachments.PushBack(&result)
 	return nil
 }
@@ -88,7 +89,16 @@ func (m *Message) RemoveAttachmentByName(name string) {
 	}
 }
 
-func (m *Message) ToBytes() []byte {
+func (m *Message) AddressList(key string) ([]*mail.Address, error) {
+	hdr := m.header.Get(key)
+	if hdr == "" {
+		return nil, mail.ErrHeaderNotPresent
+	}
+
+	return mail.ParseAddressList(hdr)
+}
+
+func (m *Message) ToBytes() ([]byte, error) {
 	mb := newMessageBuilder()
 	return mb.Build(m)
 }

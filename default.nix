@@ -1,6 +1,6 @@
 { pkgs ? import <nixpkgs> { } }:
 with pkgs;
-buildGo121Module {
+buildGo122Module {
   pname = "she";
   version = "0.1.0";
 
