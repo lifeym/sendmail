@@ -10,6 +10,7 @@
         let pkgs = nixpkgs.legacyPackages.${system}; in
         {
           devShells.default = import ./shell.nix { inherit pkgs; };
+          packages.default = import ./default.nix { inherit pkgs; };
         }
       );
 }

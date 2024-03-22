@@ -12,6 +12,10 @@ tasks:
     cmds:
     - go run main.go send -a leonardo_yu -m stock-info-to-self -f test-mail.yaml
   
-  build:
+  docker:
     cmds:
     - ko build
+  
+  build:
+    cmds:
+    - nix build

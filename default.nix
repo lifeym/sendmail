@@ -5,7 +5,7 @@ buildGo122Module {
   version = "0.1.0";
 
   src = ./.;
-  vendorHash = "sha256-J/WOPdLykqxDa5GEs7rN/3DtDVzQfjch2tgIuu9xnWA=";
+  vendorHash = "sha256-6B9O6ho4COpJy4HlkzQ0lk+ieezRO3xg9LyLHzoxYzc=";
 
   # nativeBuildInputs = [
   # ];
