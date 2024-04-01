@@ -9,6 +9,10 @@ import (
 
 type mailHeaderData map[string]StringArray
 
+func (h mailHeaderData) Add(k string, v string) {
+	h[k] = append(h[k], v)
+}
+
 func (h mailHeaderData) ToMIMEHeader() textproto.MIMEHeader {
 	result := make(textproto.MIMEHeader)
 	for k := range h {
@@ -20,26 +24,24 @@ func (h mailHeaderData) ToMIMEHeader() textproto.MIMEHeader {
 	return result
 }
 
+type messageAttachment struct {
+	Name   string
+	Path   string
+	Header mailHeaderData
+}
+
 // Message file
 type messageTemplate struct {
 	Name        string
 	Header      mailHeaderData
 	Body        string
-	Attachments []struct {
-		Name   string
-		Path   string
-		Header mailHeaderData
-	}
+	Attachments []messageAttachment
 }
 
 type messageSpec struct {
 	Header      mailHeaderData
 	Body        string
-	Attachments []struct {
-		Name   string
-		Path   string
-		Header mailHeaderData
-	}
+	Attachments []messageAttachment
 }
 
 type mailConfig struct {

@@ -17,8 +17,8 @@ type AccountConfig struct {
 type SmtpConfig struct {
 	Name     string
 	Host     string
-	Port     int
-	StartTLS bool `yaml:"starttls"`
+	Port     string
+	StartTLS string `yaml:"starttls"`
 }
 
 type AppConfig struct {

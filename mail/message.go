@@ -1,11 +1,12 @@
 package mail
 
 import (
-	"container/list"
 	"net/mail"
 	"net/textproto"
 	"os"
 	"path/filepath"
+
+	"github.com/lifeym/she/genericlist"
 )
 
 type MessageAttachment struct {
@@ -22,31 +23,30 @@ type Message struct {
 	// Bcc         []string
 	// Subject     string
 	Body        string
-	attachments *list.List
-	header      mail.Header
+	Attachments genericlist.GenericList[*MessageAttachment]
+	Header      mail.Header
 }
 
 func NewMessage() *Message {
 	return &Message{
-		attachments: list.New(),
-		header:      make(mail.Header),
+		Header: make(mail.Header),
 	}
 }
 
 func (m *Message) AddHeader(field string, value string) {
-	textproto.MIMEHeader(m.header).Add(field, value)
+	textproto.MIMEHeader(m.Header).Add(field, value)
 }
 
 func (m *Message) SetHeader(field string, value string) {
-	textproto.MIMEHeader(m.header).Set(field, value)
+	textproto.MIMEHeader(m.Header).Set(field, value)
 }
 
 func (m *Message) GetHeader(field string) string {
-	return m.header.Get(field)
+	return m.Header.Get(field)
 }
 
 func (m *Message) RemoveHeader(field string) {
-	textproto.MIMEHeader(m.header).Del(field)
+	textproto.MIMEHeader(m.Header).Del(field)
 }
 
 func (m *Message) AttachFile(src string, name string, header textproto.MIMEHeader) error {
@@ -64,33 +64,12 @@ func (m *Message) AttachFile(src string, name string, header textproto.MIMEHeade
 	}
 
 	result := MessageAttachment{attachName, b, header}
-	m.attachments.PushBack(&result)
+	m.Attachments.Append(&result)
 	return nil
 }
 
-func (m *Message) RemoveAttachmentByIndex(index int) {
-	i := 0
-	for el := m.attachments.Front(); el != nil; el = el.Next() {
-		i++
-		if i == index {
-			m.attachments.Remove(el)
-			break
-		}
-	}
-}
-
-func (m *Message) RemoveAttachmentByName(name string) {
-	for el := m.attachments.Front(); el != nil; el = el.Next() {
-		att := el.Value.(*MessageAttachment)
-		if att.Name == name {
-			m.attachments.Remove(el)
-			break
-		}
-	}
-}
-
 func (m *Message) AddressList(key string) ([]*mail.Address, error) {
-	hdr := m.header.Get(key)
+	hdr := m.Header.Get(key)
 	if hdr == "" {
 		return nil, mail.ErrHeaderNotPresent
 	}

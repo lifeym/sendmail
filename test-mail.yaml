@@ -18,4 +18,4 @@ mails:
   template: test-mail
   spec:
     header:
-      subject: "override subject with spec"
+      subject: "{{prompt \"enter subject:\"}}"

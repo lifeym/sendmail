@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/lifeym/she/config"
@@ -19,7 +18,7 @@ var (
 
 var sendCmd = &cobra.Command{
 	Use:   "send",
-	Short: "send -c -a -m",
+	Short: "send -f -a -m",
 	Long: `she命令行邮件客户端
                    Copyright lifeym 2024`,
 	Args: cobra.ArbitraryArgs,
@@ -35,7 +34,7 @@ var sendCmd = &cobra.Command{
 
 func init() {
 	sendCmd.Flags().StringVarP(&_account, "account", "a", "", `Account config name in config file.`)
-	sendCmd.Flags().StringVarP(&_mail, "mail", "m", "", `Mail config names in config file to be sent, default to all.`)
+	sendCmd.Flags().StringVarP(&_mail, "message", "m", "", `Message names in message file to be sent, default to all.`)
 	sendCmd.Flags().StringVarP(&_config, "message-file", "f", "", `Mail message config file.`)
 	sendCmd.Flags().BoolVarP(&_print, "print", "p", false, `Print mail message content to stdout.`)
 	sendCmd.MarkFlagRequired("account")
@@ -61,71 +60,26 @@ func send(accountRef string, mailRef string, cfgPath string) error {
 		return err
 	}
 
-	account := cfg.GetAccount(accountRef)
-	if account == nil {
-		return fmt.Errorf("account definition not found: %s", accountRef)
+	var compiledMail *config.CompiledMail
+	if compiledMail, err = config.CompileMail(cfg, msgFile, accountRef, mailRef); err != nil {
+		return err
 	}
 
-	mailDef := msgFile.GetMail(mailRef)
-	if mailDef == nil {
-		return fmt.Errorf("mail definition not found: %s", mailRef)
-	}
-
-	msgTpl := msgFile.GetTemplate(mailDef.Template)
-	if msgTpl == nil {
-		return fmt.Errorf("message definition not found: %s", mailDef.Template)
-	}
-
-	msg := mail.NewMessage()
-
-	// construct message header
-	for k := range msgTpl.Header {
-		for _, v := range msgTpl.Header[k] {
-			msg.AddHeader(k, v)
-		}
-	}
-
-	for k := range mailDef.Spec.Header {
-		msg.RemoveHeader(k)
-		for _, v := range mailDef.Spec.Header[k] {
-			msg.AddHeader(k, v)
-		}
-	}
-
-	if msg.GetHeader("from") == "" {
-		msg.SetHeader("from", account.DefaultFrom)
-	}
-
-	if msg.GetHeader("from") == "" {
+	if compiledMail.Message.GetHeader("from") == "" {
 		return fmt.Errorf("mail: header missing or empty -- %s", "from")
 	}
 
-	if msg.GetHeader("to") == "" {
+	if compiledMail.Message.GetHeader("to") == "" {
 		return fmt.Errorf("mail: header missing or empty -- %s", "to")
 	}
 
-	// body
-	if mailDef.Spec.Body != "" {
-		msg.Body = mailDef.Spec.Body
-	} else {
-		msg.Body = msgTpl.Body
-	}
-
-	// attachements
-	for _, att := range slices.Concat(mailDef.Spec.Attachments, msgTpl.Attachments) {
-		err = msg.AttachFile(att.Path, att.Name, att.Header.ToMIMEHeader())
-		if err != nil {
-			return fmt.Errorf("cannot attach file: %s. Err: %s", att.Path, err)
-		}
-	}
-
 	// date
-	if msg.GetHeader("date") == "" {
-		msg.SetHeader("date", time.Now().Format(time.RFC1123Z))
+	if compiledMail.Message.GetHeader("date") == "" {
+		compiledMail.Message.SetHeader("date", time.Now().Format(time.RFC1123Z))
 	}
 
 	if _print {
-		msgData, err := msg.ToBytes()
+		msgData, err := compiledMail.Message.ToBytes()
 		if err != nil {
 			return nil
 		}
@@ -133,9 +87,8 @@ func send(accountRef string, mailRef string, cfgPath string) error {
 		fmt.Println(string(msgData))
 	}
 
-	smtpHost := cfg.GetSmtp(account.SmtpRef)
-	smtp := mail.New(account.LoginUser, account.Password, smtpHost.Host, smtpHost.Port, smtpHost.StartTLS)
-	err = smtp.Send(msg)
+	smtp := mail.New(compiledMail.LoginUser, compiledMail.Password, compiledMail.Smtp.Host, compiledMail.Smtp.Port, compiledMail.Smtp.StartTLS)
+	err = smtp.Send(compiledMail.Message)
 	if err != nil {
 		return err
 	}
