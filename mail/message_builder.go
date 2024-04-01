@@ -77,7 +77,7 @@ func (mb *messageBuilder) writeHeader(h mail.Header) error {
 }
 
 func writeMessageAttachments(m *Message, mw *multipart.Writer) error {
-	for _, att := range m.Attachments.Data {
+	for _, att := range m.Attachments {
 		headerPatchDefault(att.Header, "Content-Type", http.DetectContentType(att.Content))
 		headerPatchDefault(att.Header, "Content-Transfer-Encoding", "base64")
 		headerPatchDefault(att.Header, "Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", att.Name))
@@ -108,7 +108,7 @@ func (mb *messageBuilder) Build(m *Message) ([]byte, error) {
 
 	// mb.appendFiled("MIME-Version", "1.0")
 
-	if len(m.Attachments.Data) > 0 {
+	if len(m.Attachments) > 0 {
 		mw := multipart.NewWriter(mb.buf)
 		boundary := mw.Boundary()
 		if _, err := mb.writeFiled("Content-Type", fmt.Sprintf("multipart/mixed; boundary=\"%s\"", boundary)); err != nil {
